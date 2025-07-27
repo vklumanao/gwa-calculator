@@ -1,0 +1,128 @@
+body {
+  background: linear-gradient(120deg, #ffd700 1%, #009e60 60%, #ffd700 100%);
+  min-height: 100vh;
+  font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+}
+
+.card {
+  background: #fff;
+  border: 2px solid;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+.card-title {
+  color: #00693e;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.card-body {
+  background: #fff;
+  border-radius: 16px;
+}
+
+.btn-csu {
+  background: #ffd700;
+  color: #00693e;
+  border: none;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+  border-radius: 8px;
+}
+
+.btn-csu:hover,
+.btn-csu:focus {
+  background: #fff;
+  color: #004225;
+}
+
+.btn-outline-csu {
+  color: #00693e;
+  border-color: black;
+  background: #e6c200;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-outline-csu:hover,
+.btn-outline-csu:focus {
+  background: #ffd700;
+  color: #00693e;
+  border-color: #ffd700;
+}
+
+.csu-table {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px #00693e22;
+}
+
+.bg-csu-green {
+  background-color: #00693e !important;
+}
+
+.table-csu th {
+  background: #00693e !important;
+  color: #fff !important;
+  border-color: #ffd700 !important;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.table-csu th,
+.csu-table td {
+  vertical-align: middle;
+  font-size: 1rem;
+}
+
+.csu-table tr {
+  transition: background 0.15s;
+}
+
+.csu-table tbody tr:hover {
+  background: #f7fbe7;
+}
+
+.csu-table td {
+  border-color: #ffd70033;
+}
+
+.table td,
+.table th {
+  vertical-align: middle;
+}
+
+.table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+input.form-control:focus {
+  border-color: #ffd700;
+  box-shadow: 0 0 0 0.1rem #ffd70055;
+}
+
+.text-csu-green {
+  color: #00693e !important;
+}
+
+.card-taller {
+  min-height: 650px; /* adjust as needed */
+}
+
+#gwaResult {
+  font-size: 2rem;
+}
+
+@media (max-width: 767px) {
+  .card {
+    border-radius: 10px;
+  }
+  .card-body {
+    padding: 1rem;
+  }
+  .csu-table {
+    font-size: 0.95rem;
+  }
+}
