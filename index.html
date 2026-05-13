@@ -194,7 +194,7 @@
                 </button>
               </div>
 
-              <div class="table-responsive">
+              <div class="subjects-table-wrap">
                 <div class="table-shell">
                   <div class="table-toolbar">
                     <span class="table-caption">Current subject list</span>
@@ -237,6 +237,13 @@
                 </p>
               </div>
               <div class="result-actions">
+                <button
+                  class="btn btn-outline-csu btn-export"
+                  id="exportCertificateBtn"
+                >
+                  <i class="bi bi-image"></i>
+                  Generate Certificate
+                </button>
                 <button
                   class="btn btn-outline-csu btn-export"
                   id="exportPdfBtn"
@@ -470,6 +477,62 @@
               id="confirmClearAllBtn"
             >
               Clear All
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="modal fade"
+      id="certificatePreviewModal"
+      tabindex="-1"
+      aria-labelledby="certificatePreviewModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-2 modal-csu">
+          <div class="modal-header modal-csu-header">
+            <h5
+              class="modal-title text-white"
+              id="certificatePreviewModalLabel"
+            >
+              Certificate Preview
+            </h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body certificate-preview-body">
+            <p class="text-muted mb-3">
+              Review the generated certificate image before downloading it.
+            </p>
+            <div class="certificate-preview-frame">
+              <img
+                id="certificatePreviewImage"
+                class="certificate-preview-image"
+                alt="Generated certificate preview"
+              />
+            </div>
+          </div>
+          <div class="modal-footer border-0 pt-0">
+            <button
+              type="button"
+              class="btn btn-outline-csu"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              class="btn btn-csu px-4"
+              id="downloadCertificateBtn"
+            >
+              <i class="bi bi-download"></i>
+              Download PNG
             </button>
           </div>
         </div>
