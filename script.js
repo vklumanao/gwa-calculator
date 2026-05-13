@@ -1,11 +1,14 @@
 const STORAGE_KEY = "gwa-calculator-subjects";
+const NAME_STORAGE_KEY = "gwa-calculator-full-name";
 
 // Store subjects and track which row is being edited.
 let subjects = loadSubjects();
 let editingIndex = null;
+let fullName = loadFullName();
 
 const subjectForm = document.getElementById("subjectForm");
 const calculateBtn = document.getElementById("calculateBtn");
+const exportPdfBtn = document.getElementById("exportPdfBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 const confirmClearAllBtn = document.getElementById("confirmClearAllBtn");
 const gwaResult = document.getElementById("gwaResult");
@@ -13,10 +16,12 @@ const formFeedback = document.getElementById("formFeedback");
 const storageStatus = document.getElementById("storageStatus");
 const clearAllModalElement = document.getElementById("clearAllModal");
 const clearAllModal = new bootstrap.Modal(clearAllModalElement);
+const fullNameInput = document.getElementById("fullName");
 const subjectInput = document.getElementById("subject");
 const unitsInput = document.getElementById("units");
 const gradeInput = document.getElementById("grade");
 
+fullNameInput.value = fullName;
 renderAll();
 setStorageStatus(
   subjects.length
@@ -25,6 +30,11 @@ setStorageStatus(
       } from this browser.`
     : "Entries save only in this browser on this device.",
 );
+
+fullNameInput.addEventListener("input", function () {
+  fullName = normalizeFullName(this.value);
+  persistFullName();
+});
 
 subjectForm.onsubmit = function (e) {
   e.preventDefault();
@@ -83,6 +93,40 @@ calculateBtn.onclick = function () {
       gwa: Number(gwa.toFixed(2)),
     });
   }
+};
+
+exportPdfBtn.onclick = function () {
+  if (subjects.length === 0) {
+    setFormFeedback(
+      "Add at least one subject before exporting a PDF.",
+      "error",
+    );
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=960,height=720");
+  if (!printWindow) {
+    setFormFeedback(
+      "Your browser blocked the export window. Please allow pop-ups and try again.",
+      "error",
+    );
+    return;
+  }
+
+  const reportMarkup = buildPdfReportMarkup();
+  printWindow.document.open();
+  printWindow.document.write(reportMarkup);
+  printWindow.document.close();
+  setFormFeedback("PDF report is ready in the print dialog.", "success");
+  setStorageStatus(
+    `Prepared a printable report for ${subjects.length} subject${
+      subjects.length === 1 ? "" : "s"
+    }.`,
+  );
+  trackAnalytics("export_pdf", {
+    subjectCount: subjects.length,
+    gwa: Number(calculateGwa().toFixed(2)),
+  });
 };
 
 clearAllBtn.onclick = function () {
@@ -470,8 +514,26 @@ function loadSubjects() {
   }
 }
 
+function persistFullName() {
+  if (!fullName) {
+    window.localStorage.removeItem(NAME_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(NAME_STORAGE_KEY, fullName);
+}
+
+function loadFullName() {
+  const savedName = window.localStorage.getItem(NAME_STORAGE_KEY);
+  return normalizeFullName(savedName || "");
+}
+
 function formatNumber(value) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+}
+
+function normalizeFullName(value) {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function calculateGwa() {
@@ -519,6 +581,790 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
   return escapeHtml(value);
+}
+
+function buildPdfReportMarkup() {
+  const gwa = calculateGwa();
+  const evaluation = getStanding(gwa);
+  const totalUnits = subjects.reduce((sum, subject) => sum + subject.units, 0);
+  const totalWeighted = subjects.reduce(
+    (sum, subject) => sum + subject.units * subject.grade,
+    0,
+  );
+  const generatedAt = new Date().toLocaleString("en-PH", {
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+  const generatedDate = new Date().toLocaleDateString("en-PH", {
+    dateStyle: "long",
+  });
+  const recipientName = fullName || "The Recorded Student";
+  const subjectChunks = chunkSubjectsForPdf(subjects, 12);
+  const standingToneClass = getStandingToneClass(gwa);
+  const detailPages = subjectChunks
+    .map((chunk, pageIndex) => {
+      const rows = chunk
+        .map(
+          (subject, index) => `
+            <tr>
+              <td>${pageIndex * 12 + index + 1}</td>
+              <td>${escapeHtml(subject.subject)}</td>
+              <td>${formatNumber(subject.units)}</td>
+              <td>${formatNumber(subject.grade)}</td>
+              <td>${formatNumber(subject.units * subject.grade)}</td>
+            </tr>
+          `,
+        )
+        .join("");
+      const chunkWeighted = chunk.reduce(
+        (sum, subject) => sum + subject.units * subject.grade,
+        0,
+      );
+      const pageTitle =
+        pageIndex === 0
+          ? "Attached Subject Breakdown"
+          : `Attached Subject Breakdown (Page ${pageIndex + 1})`;
+      const pageLead =
+        pageIndex === 0
+          ? "A detailed record of the subjects, grades, units, and weighted values used to compute the certified GWA."
+          : "Continuation of the subject-by-subject breakdown used in the certificate summary.";
+      const summaryBlock =
+        pageIndex === 0
+          ? `
+            <section class="summary-grid detail-summary-grid">
+              <div class="summary-card">
+                <span class="summary-label">Subjects</span>
+                <span class="summary-value">${subjects.length}</span>
+              </div>
+              <div class="summary-card">
+                <span class="summary-label">Total Units</span>
+                <span class="summary-value">${formatNumber(totalUnits)}</span>
+              </div>
+              <div class="summary-card">
+                <span class="summary-label">Computed GWA</span>
+                <span class="summary-value">${gwa.toFixed(2)}</span>
+              </div>
+              <div class="summary-card">
+                <span class="summary-label">Standing</span>
+                <span class="summary-value">${escapeHtml(evaluation.label)}</span>
+              </div>
+            </section>
+          `
+          : `
+            <div class="table-page-note">
+              <span class="table-page-count">Rows ${pageIndex * 12 + 1}-${pageIndex * 12 + chunk.length}</span>
+              <span>Page ${pageIndex + 1} of ${subjectChunks.length}</span>
+            </div>
+          `;
+
+      return `
+        <section class="report-page detail-page">
+          <header class="report-header detail-header">
+            <div>
+              <div class="brand-mark brand-mark-left">
+                <span class="brand-badge">G</span>
+                <p class="eyebrow">GWA Genie</p>
+              </div>
+              <h2 class="details-page-title">${pageTitle}</h2>
+              <p class="lead">${pageLead}</p>
+            </div>
+            <p class="meta">
+              Generated on<br />
+              <strong>${escapeHtml(generatedAt)}</strong>
+            </p>
+          </header>
+
+          ${summaryBlock}
+
+          <section class="report-table-shell">
+            <div class="report-table-bar">
+              <span>Recorded Subjects</span>
+              <span>Weighted Value on This Page: ${formatNumber(chunkWeighted)}</span>
+            </div>
+            <table aria-label="Subject summary table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Subject</th>
+                  <th>Units</th>
+                  <th>Grade</th>
+                  <th>Weighted Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </section>
+        </section>
+      `;
+    })
+    .join("");
+
+  return `
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>GWA Genie Report</title>
+        <style>
+          @page {
+            size: portrait;
+            margin: 10mm;
+          }
+
+          :root {
+            color-scheme: light;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            font-family: "Poppins", "Segoe UI", Arial, sans-serif;
+            color: #183126;
+            background:
+              linear-gradient(135deg, #fff4bc 0%, #f8f3dc 52%, #dff2df 100%);
+          }
+
+          .report {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 18px 14px 24px;
+          }
+
+          .report-page {
+            background: #ffffff;
+            border: 3px solid #183126;
+            border-radius: 24px;
+            padding: 20px;
+            box-shadow: 12px 12px 0 #183126;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .report-page + .report-page {
+            margin-top: 28px;
+          }
+
+          .certificate-page {
+            position: relative;
+            overflow: hidden;
+            min-height: 0;
+            padding: 18px;
+            background:
+              radial-gradient(circle at top left, #ffe37a 0, transparent 28%),
+              radial-gradient(circle at bottom right, #d8f0dd 0, transparent 24%),
+              linear-gradient(180deg, #fffdf4 0%, #fff8da 52%, #f7f4e6 100%);
+          }
+
+          .certificate-frame {
+            border: 3px solid #183126;
+            border-radius: 24px;
+            min-height: 0;
+            padding: 20px 20px 16px;
+            background:
+              linear-gradient(180deg, rgba(255, 250, 230, 0.98), rgba(252, 255, 247, 0.98));
+            display: grid;
+            gap: 14px;
+          }
+
+          .certificate-frame::before {
+            content: "";
+            position: absolute;
+            inset: 8px;
+            border: 1px dashed rgba(24, 49, 38, 0.28);
+            border-radius: 28px;
+            pointer-events: none;
+          }
+
+          .brand-mark {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 8px;
+          }
+
+          .brand-mark-left {
+            justify-content: flex-start;
+          }
+
+          .brand-badge {
+            width: 38px;
+            height: 38px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(180deg, #ffe37a 0%, #ffd700 100%);
+            border: 2px solid #183126;
+            color: #004225;
+            font-size: 18px;
+            box-shadow: 3px 3px 0 #183126;
+          }
+
+          .certificate-header {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-items: center;
+            text-align: center;
+            gap: 8px;
+            margin-bottom: 0;
+            border: 2px solid #183126;
+            border-radius: 18px;
+            background:
+              linear-gradient(180deg, rgba(255, 241, 184, 0.42), rgba(255, 255, 255, 0.96) 42%, rgba(216, 240, 221, 0.48));
+            padding: 14px 16px 12px;
+          }
+
+          .eyebrow {
+            margin: 0;
+            color: #00693e;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 10px;
+            font-weight: 700;
+          }
+
+          .certificate-title {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 32px;
+            line-height: 1.02;
+            letter-spacing: -0.02em;
+            text-align: center;
+            color: #0e2b1d;
+          }
+
+          .lead,
+          .meta,
+          .note {
+            margin: 0;
+            color: #51645c;
+            line-height: 1.6;
+          }
+
+          .certificate-intro {
+            margin: 0;
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.35;
+            max-width: 580px;
+          }
+
+          .certificate-recipient {
+            display: grid;
+            justify-items: center;
+            gap: 4px;
+            padding: 8px 10px 10px;
+            border: 2px dashed rgba(24, 49, 38, 0.22);
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.82);
+          }
+
+          .certificate-recipient-label {
+            color: #00693e;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 10px;
+            font-weight: 700;
+          }
+
+          .certificate-recipient-name {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 28px;
+            line-height: 1.05;
+            letter-spacing: -0.01em;
+            color: #0e2b1d;
+            text-align: center;
+          }
+
+          .certificate-body {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            align-items: stretch;
+            margin-bottom: 0;
+          }
+
+          .certificate-side {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+
+          .certificate-main,
+          .certificate-card {
+            border: 2px solid #183126;
+            border-radius: 18px;
+            background: #ffffff;
+            padding: 10px 12px;
+          }
+
+          .certificate-main {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-items: center;
+            text-align: center;
+            gap: 10px;
+            box-shadow: 6px 6px 0 #183126;
+            background:
+              linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 242, 0.98));
+            padding: 16px 16px 14px;
+          }
+
+          .certificate-score {
+            text-align: center;
+            border-right: none;
+          }
+
+          .certificate-copy {
+            text-align: center;
+            max-width: 520px;
+          }
+
+          .certificate-copy h2 {
+            margin: 0 0 4px;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 22px;
+            line-height: 1.05;
+            color: #004225;
+          }
+
+          .certificate-label {
+            display: block;
+            margin-bottom: 4px;
+            color: #00693e;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 10px;
+            font-weight: 700;
+          }
+
+          .certificate-gwa {
+            display: block;
+            margin-bottom: 4px;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 72px;
+            line-height: 0.9;
+            color: #004225;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+          }
+
+          .certificate-standing {
+            display: inline-block;
+            margin-bottom: 6px;
+            padding: 7px 14px;
+            border: 2px solid #183126;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #fff4c7 0%, #ffe37a 100%);
+            font-weight: 700;
+            font-size: 11px;
+            box-shadow: 2px 2px 0 #183126;
+          }
+
+          .certificate-card {
+            background:
+              linear-gradient(180deg, rgba(255, 248, 220, 0.96), rgba(255, 255, 255, 0.98));
+          }
+
+          .certificate-detail {
+            max-width: none;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.35;
+          }
+
+          .meta {
+            text-align: right;
+            font-size: 14px;
+          }
+
+          .certificate-panel-title {
+            display: block;
+            margin-bottom: 4px;
+            color: #00693e;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 10px;
+            font-weight: 700;
+          }
+
+          .certificate-panel-copy {
+            margin: 0;
+            color: #385047;
+            line-height: 1.2;
+            font-size: 10px;
+          }
+
+          .certificate-summary {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+          }
+
+          .certificate-metric {
+            padding-top: 6px;
+            border-top: 1px solid rgba(24, 49, 38, 0.12);
+          }
+
+          .certificate-card-value {
+            display: block;
+            margin-top: 2px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #004225;
+          }
+
+          .certificate-footer {
+            margin-top: 0;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(24, 49, 38, 0.2);
+            text-align: center;
+            font-size: 10px;
+            line-height: 1.2;
+            color: #51645c;
+          }
+
+          .details-page-title {
+            margin: 0 0 10px;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 34px;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+          }
+
+          .report-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 2px dashed rgba(24, 49, 38, 0.22);
+          }
+
+          .detail-header {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+          }
+
+          .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+          }
+
+          .detail-summary-grid {
+            margin-bottom: 10px;
+          }
+
+          .summary-card {
+            border: 2px solid #183126;
+            border-radius: 18px;
+            padding: 12px 14px;
+            background: #fff9d7;
+            box-shadow: 4px 4px 0 #183126;
+          }
+
+          .summary-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #00693e;
+          }
+
+          .summary-value {
+            display: block;
+            font-size: 20px;
+            font-weight: 700;
+            color: #004225;
+          }
+
+          .report-table-shell {
+            border: 3px solid #183126;
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          .report-table-bar {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 10px 14px;
+            background: #ffe37a;
+            border-bottom: 3px solid #183126;
+            font-size: 12px;
+            color: #004225;
+            font-weight: 600;
+          }
+
+          .table-page-note {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+            color: #51645c;
+            font-size: 11px;
+            font-weight: 600;
+          }
+
+          .table-page-count {
+            color: #00693e;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+            background: #ffffff;
+          }
+
+          th,
+          td {
+            border: 1px solid rgba(24, 49, 38, 0.14);
+            padding: 7px 9px;
+            text-align: left;
+            font-size: 12px;
+          }
+
+          th {
+            background: #d8f0dd;
+            color: #004225;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
+
+          td:nth-child(1),
+          td:nth-child(3),
+          td:nth-child(4),
+          td:nth-child(5) {
+            text-align: center;
+          }
+
+          tbody tr:nth-child(even) {
+            background: #fffcf1;
+          }
+
+          .report-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(24, 49, 38, 0.2);
+          }
+
+          .note {
+            font-size: 11px;
+          }
+
+          @media print {
+            body {
+              background: #ffffff;
+            }
+
+            .report {
+              max-width: none;
+              padding: 0;
+            }
+
+            .report-page {
+              border: none;
+              border-radius: 0;
+              padding: 0;
+              box-shadow: none;
+              width: 100%;
+              min-height: auto;
+              height: auto;
+              overflow: visible;
+              break-after: page;
+              page-break-after: always;
+            }
+
+            .report-page + .report-page {
+              margin-top: 0;
+            }
+
+            .certificate-page {
+              min-height: auto;
+              background: #ffffff;
+              padding: 0;
+            }
+
+            .certificate-frame {
+              min-height: auto;
+              padding: 16px 18px;
+            }
+
+            .certificate-frame::before {
+              inset: 6px;
+            }
+
+            .summary-card,
+            .certificate-main {
+              box-shadow: none;
+            }
+          }
+
+          @media (max-width: 1120px) {
+            .certificate-page {
+              min-height: auto;
+              padding: 24px;
+            }
+
+            .certificate-frame {
+              padding: 24px 18px;
+            }
+
+            .certificate-title {
+              font-size: 30px;
+            }
+
+            .certificate-gwa {
+              font-size: 52px;
+            }
+
+            .certificate-body,
+            .certificate-summary,
+            .report-header {
+              display: grid;
+              grid-template-columns: 1fr;
+            }
+
+            .meta {
+              text-align: left;
+            }
+
+            .summary-grid,
+            .detail-summary-grid {
+              grid-template-columns: 1fr;
+            }
+
+            .table-page-note,
+            .report-table-bar,
+            .report-footer {
+              display: grid;
+              grid-template-columns: 1fr;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="report">
+          <section class="report-page certificate-page">
+            <div class="certificate-frame">
+              <header class="certificate-header">
+                <div class="brand-mark">
+                  <span class="brand-badge">G</span>
+                  <p class="eyebrow">GWA Genie</p>
+                </div>
+                <div>
+                  <h1 class="certificate-title">Certificate of Computed General Weighted Average</h1>
+                  <p class="certificate-intro lead">
+                    This certifies the computed General Weighted Average based on the
+                    subject entries recorded in GWA Genie.
+                  </p>
+                </div>
+                <p class="eyebrow">Issued ${escapeHtml(generatedDate)}</p>
+              </header>
+              <section class="certificate-recipient">
+                <span class="certificate-recipient-label">Presented To</span>
+                <h2 class="certificate-recipient-name">${escapeHtml(recipientName)}</h2>
+              </section>
+
+              <section class="certificate-body">
+                <div class="certificate-main">
+                  <div class="certificate-score">
+                    <span class="certificate-label">Certified Computed GWA</span>
+                    <strong class="certificate-gwa">${gwa.toFixed(2)}</strong>
+                    <span class="certificate-standing">${escapeHtml(evaluation.label)}</span>
+                  </div>
+                  <div class="certificate-copy">
+                    <h2>Academic Standing Summary</h2>
+                    <p class="certificate-detail lead">
+                      ${escapeHtml(evaluation.detail)}
+                    </p>
+                  </div>
+                </div>
+                <div class="certificate-side">
+                  <div class="certificate-card">
+                    <span class="certificate-panel-title">Certificate Scope</span>
+                    <p class="certificate-panel-copy">
+                      This certificate reflects the weighted average generated from
+                      the currently recorded semester entries and is supported by
+                      the attached subject breakdown.
+                    </p>
+                    <section class="certificate-summary">
+                      <div class="certificate-metric">
+                        <span class="summary-label">Subjects</span>
+                        <span class="certificate-card-value">${subjects.length}</span>
+                      </div>
+                      <div class="certificate-metric">
+                        <span class="summary-label">Units</span>
+                        <span class="certificate-card-value">${formatNumber(totalUnits)}</span>
+                      </div>
+                      <div class="certificate-metric">
+                        <span class="summary-label">Standing</span>
+                        <span class="certificate-card-value">${escapeHtml(evaluation.label)}</span>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+          ${detailPages}
+        </main>
+        <script>
+          window.addEventListener("load", () => {
+            window.print();
+          });
+
+          window.addEventListener("afterprint", () => {
+            window.close();
+          });
+        </script>
+      </body>
+    </html>
+  `;
+}
+
+function getStandingToneClass(gwa) {
+  if (gwa <= 1.75) {
+    return "standing-good";
+  }
+
+  if (gwa <= 3) {
+    return "standing-caution";
+  }
+
+  return "standing-alert";
+}
+
+function chunkSubjectsForPdf(subjectList, chunkSize) {
+  const chunks = [];
+
+  for (let index = 0; index < subjectList.length; index += chunkSize) {
+    chunks.push(subjectList.slice(index, index + chunkSize));
+  }
+
+  return chunks;
 }
 
 window.startEdit = startEdit;
