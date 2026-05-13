@@ -86,7 +86,6 @@ Note: Vercel custom event availability depends on your Vercel plan.
 The app is deployed on Vercel:
 
 - Production domain: [https://gwa-genie.vercel.app/](https://gwa-genie.vercel.app/)
-- Deployment URL: `https://gwa-calculator-aqffyro26-vicryl-kez-lumanaos-projects.vercel.app`
 
 ## Author
 
