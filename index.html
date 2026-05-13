@@ -290,24 +290,25 @@
           </div>
           <div class="modal-body text-start">
             <small>
-              We value your privacy. This website does not use Google Analytics
-              or any third-party tracking tools. No information such as your IP
-              address, browser type, device type, or time spent on the site is
-              collected for analytics purposes.
+              We value your privacy. This website uses Vercel Web Analytics to
+              measure visits and page views in a privacy-friendly way. We do not
+              use Google Analytics, advertising trackers, or cookies for
+              analytics.
             </small>
             <br />
             <br />
             <small>
-              We do not collect any personal information unless you voluntarily
-              provide it (for example, through direct communication). By using
-              this website, you can be assured that your data is not being
-              tracked or analyzed.
+              Vercel reports anonymized usage information such as page visits,
+              referrers, and general device or browser data. We do not collect
+              personal information unless you voluntarily provide it, for
+              example through direct communication.
             </small>
             <br />
             <br />
             <small>
               If you have concerns about privacy, you may close this site at any
-              time. Your use of this website is completely anonymous and secure.
+              time. For more details, please refer to Vercel's privacy and
+              analytics documentation.
             </small>
           </div>
         </div>
@@ -363,6 +364,14 @@
       </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      window.va =
+        window.va ||
+        function () {
+          (window.vaq = window.vaq || []).push(arguments);
+        };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
