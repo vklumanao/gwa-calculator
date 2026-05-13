@@ -365,13 +365,22 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-      window.va =
-        window.va ||
-        function () {
-          (window.vaq = window.vaq || []).push(arguments);
-        };
+      if (
+        location.hostname === "gwa-genie.vercel.app" ||
+        location.hostname.endsWith(".vercel.app")
+      ) {
+        window.va =
+          window.va ||
+          function () {
+            (window.vaq = window.vaq || []).push(arguments);
+          };
+
+        const analyticsScript = document.createElement("script");
+        analyticsScript.defer = true;
+        analyticsScript.src = "/_vercel/insights/script.js";
+        document.body.appendChild(analyticsScript);
+      }
     </script>
-    <script defer src="/_vercel/insights/script.js"></script>
     <script src="script.js"></script>
   </body>
 </html>
