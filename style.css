@@ -32,7 +32,7 @@ body {
 }
 
 .app-frame {
-  max-width: 920px;
+  max-width: 1120px;
 }
 
 .calculator-card {
@@ -218,6 +218,14 @@ body {
   gap: 0.5rem;
 }
 
+.btn-export {
+  min-width: 180px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
 .btn-outline-csu {
   color: var(--csu-green);
   border: 2px solid var(--neo-border);
@@ -295,6 +303,11 @@ body {
   border-radius: 24px;
   overflow: hidden;
   box-shadow: 8px 8px 0 #183126;
+}
+
+.table-responsive {
+  overflow-x: visible;
+  -webkit-overflow-scrolling: auto;
 }
 
 .table-toolbar {
@@ -521,6 +534,12 @@ body {
 .result-panel {
   align-items: stretch;
   flex-wrap: wrap;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .result-card {
@@ -774,6 +793,14 @@ a:focus {
   }
 
   .btn-calculate {
+    width: 100%;
+  }
+
+  .result-actions {
+    width: 100%;
+  }
+
+  .btn-export {
     width: 100%;
   }
 
