@@ -9,6 +9,7 @@ let fullName = loadFullName();
 const subjectForm = document.getElementById("subjectForm");
 const calculateBtn = document.getElementById("calculateBtn");
 const exportPdfBtn = document.getElementById("exportPdfBtn");
+const exportCertificateBtn = document.getElementById("exportCertificateBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 const confirmClearAllBtn = document.getElementById("confirmClearAllBtn");
 const gwaResult = document.getElementById("gwaResult");
@@ -16,10 +17,23 @@ const formFeedback = document.getElementById("formFeedback");
 const storageStatus = document.getElementById("storageStatus");
 const clearAllModalElement = document.getElementById("clearAllModal");
 const clearAllModal = new bootstrap.Modal(clearAllModalElement);
+const certificatePreviewModalElement = document.getElementById(
+  "certificatePreviewModal",
+);
+const certificatePreviewModal = new bootstrap.Modal(
+  certificatePreviewModalElement,
+);
+const certificatePreviewImage = document.getElementById(
+  "certificatePreviewImage",
+);
+const downloadCertificateBtn = document.getElementById(
+  "downloadCertificateBtn",
+);
 const fullNameInput = document.getElementById("fullName");
 const subjectInput = document.getElementById("subject");
 const unitsInput = document.getElementById("units");
 const gradeInput = document.getElementById("grade");
+let certificateImageDataUrl = "";
 
 fullNameInput.value = fullName;
 renderAll();
@@ -127,6 +141,40 @@ exportPdfBtn.onclick = function () {
     subjectCount: subjects.length,
     gwa: Number(calculateGwa().toFixed(2)),
   });
+};
+
+exportCertificateBtn.onclick = function () {
+  if (subjects.length === 0) {
+    setFormFeedback(
+      "Add at least one subject before generating a certificate image.",
+      "error",
+    );
+    return;
+  }
+
+  certificateImageDataUrl = buildCertificateImageDataUrl();
+  certificatePreviewImage.src = certificateImageDataUrl;
+  certificatePreviewModal.show();
+  setFormFeedback("Certificate preview is ready.", "success");
+  setStorageStatus(
+    `Prepared a certificate image for ${subjects.length} subject${
+      subjects.length === 1 ? "" : "s"
+    }.`,
+  );
+  trackAnalytics("export_certificate", {
+    subjectCount: subjects.length,
+    gwa: Number(calculateGwa().toFixed(2)),
+  });
+};
+
+downloadCertificateBtn.onclick = function () {
+  if (!certificateImageDataUrl) {
+    setFormFeedback("Generate the certificate preview first.", "error");
+    return;
+  }
+
+  downloadDataUrl(certificateImageDataUrl, getCertificateFileName());
+  setFormFeedback("Certificate image downloaded successfully.", "success");
 };
 
 clearAllBtn.onclick = function () {
@@ -1343,6 +1391,414 @@ function buildPdfReportMarkup() {
       </body>
     </html>
   `;
+}
+
+function buildCertificateImageDataUrl() {
+  const canvas = document.createElement("canvas");
+  const width = 1600;
+  const height = 1120;
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  const gwa = calculateGwa();
+  const evaluation = getStanding(gwa);
+  const totalUnits = subjects.reduce((sum, subject) => sum + subject.units, 0);
+  const generatedDate = new Date().toLocaleDateString("en-PH", {
+    dateStyle: "long",
+  });
+  const recipientName = fullName || "The Recorded Student";
+  const subjectCount = subjects.length;
+
+  context.fillStyle = "#f1ead2";
+  context.fillRect(0, 0, width, height);
+
+  const paperGradient = context.createLinearGradient(0, 0, width, height);
+  paperGradient.addColorStop(0, "#fff6cf");
+  paperGradient.addColorStop(0.45, "#fffdf5");
+  paperGradient.addColorStop(1, "#f0ecd8");
+  context.fillStyle = paperGradient;
+  context.fillRect(40, 40, width - 80, height - 80);
+
+  drawCertificateGlow(context, width, height);
+
+  context.strokeStyle = "#183126";
+  context.lineWidth = 8;
+  context.strokeRect(40, 40, width - 80, height - 80);
+  context.lineWidth = 2;
+  context.strokeRect(72, 72, width - 144, height - 144);
+
+  drawCertificateSeal(context, width / 2, 138, 32);
+  drawTopDivider(context, width);
+
+  context.textAlign = "center";
+  context.fillStyle = "#00693e";
+  context.font = "700 17px Poppins";
+  context.fillText("GWA GENIE ACADEMIC ARCHIVE", width / 2, 195);
+  context.fillStyle = "#7a6a2b";
+  context.font = "600 15px Poppins";
+  context.fillText("Personal Academic Summary Certificate", width / 2, 223);
+  context.fillStyle = "#004225";
+  context.font = "700 62px Lora, Georgia, serif";
+  context.fillText("Certificate of Academic Standing", width / 2, 300);
+
+  context.fillStyle = "#52655d";
+  context.font = "500 22px Poppins";
+  wrapCanvasText(
+    context,
+    "This certifies that the student named below has a computed general weighted average based on the recorded subjects in this session.",
+    width / 2,
+    358,
+    920,
+    30,
+  );
+
+  drawNamePlate(context, width / 2 - 430, 408, 860, 118, recipientName);
+  drawCenterBadge(context, width / 2, 614, gwa, evaluation.label);
+
+  const cards = [
+    { label: "Computed GWA", value: gwa.toFixed(2) },
+    { label: "Academic Standing", value: evaluation.label },
+    { label: "Subjects Counted", value: `${subjectCount}` },
+    { label: "Total Units", value: formatNumber(totalUnits) },
+  ];
+
+  const cardWidth = 266;
+  const cardHeight = 150;
+  const cardGap = 24;
+  const cardsTotalWidth =
+    cardWidth * cards.length + cardGap * (cards.length - 1);
+  let cardX = (width - cardsTotalWidth) / 2;
+
+  cards.forEach((card, index) => {
+    const y = 736;
+    const accentColor = index % 2 === 0 ? "#fff6cb" : "#e8f4ea";
+    drawRoundedPanel(context, cardX, y, cardWidth, cardHeight, 22, "#ffffff");
+    context.save();
+    context.fillStyle = accentColor;
+    context.beginPath();
+    roundedRectPath(context, cardX + 12, y + 12, cardWidth - 24, 42, 14);
+    context.fill();
+    context.restore();
+
+    context.strokeStyle = "#183126";
+    context.lineWidth = 3;
+    context.beginPath();
+    roundedRectPath(context, cardX, y, cardWidth, cardHeight, 22);
+    context.stroke();
+
+    context.fillStyle = "#004225";
+    context.font = "700 17px Poppins";
+    context.fillText(card.label, cardX + cardWidth / 2, y + 39);
+
+    context.fillStyle = "#004225";
+    context.font =
+      card.label === "Academic Standing"
+        ? "700 24px Lora, Georgia, serif"
+        : "700 32px Lora, Georgia, serif";
+    wrapCanvasText(
+      context,
+      card.value,
+      cardX + cardWidth / 2,
+      y + 84,
+      cardWidth - 38,
+      30,
+    );
+
+    context.fillStyle = "#7b857f";
+    context.font = "600 15px Poppins";
+    context.fillText(
+      "Based on current entries",
+      cardX + cardWidth / 2,
+      y + 126,
+    );
+
+    cardX += cardWidth + cardGap;
+  });
+
+  drawRibbonPanel(context, 200, 918, width - 400, 94);
+  return canvas.toDataURL("image/png");
+}
+
+function drawCertificateGlow(context, width, height) {
+  context.save();
+  const glow = context.createRadialGradient(
+    width / 2,
+    320,
+    140,
+    width / 2,
+    320,
+    620,
+  );
+  glow.addColorStop(0, "rgba(255, 255, 255, 0.92)");
+  glow.addColorStop(0.5, "rgba(255, 249, 214, 0.24)");
+  glow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = glow;
+  context.fillRect(100, 100, width - 200, height - 200);
+  context.restore();
+}
+
+function drawTopDivider(context, width) {
+  context.save();
+  context.strokeStyle = "#b39a38";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(width / 2 - 150, 176);
+  context.lineTo(width / 2 + 150, 176);
+  context.stroke();
+
+  context.fillStyle = "#b39a38";
+  for (let x = width / 2 - 138; x <= width / 2 + 138; x += 69) {
+    context.beginPath();
+    context.moveTo(x, 176);
+    context.lineTo(x + 7, 169);
+    context.lineTo(x + 14, 176);
+    context.lineTo(x + 7, 183);
+    context.closePath();
+    context.fill();
+  }
+  context.restore();
+}
+
+function drawCertificateSeal(context, x, y, radius = 48) {
+  context.save();
+  context.fillStyle = "#00693e";
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "#ffd700";
+  context.lineWidth = Math.max(5, radius * 0.16);
+  context.beginPath();
+  context.arc(x, y, radius - 9, 0, Math.PI * 2);
+  context.stroke();
+
+  context.fillStyle = "#ffd700";
+  context.font = `700 ${Math.round(radius * 0.9)}px Poppins`;
+  context.textAlign = "center";
+  context.fillText("G", x, y + radius * 0.28);
+  context.restore();
+}
+
+function drawNamePlate(context, x, y, width, height, recipientName) {
+  context.save();
+  const plateGradient = context.createLinearGradient(x, y, x, y + height);
+  plateGradient.addColorStop(0, "#fffdfa");
+  plateGradient.addColorStop(1, "#f8f0c7");
+  drawRoundedPanel(context, x, y, width, height, 24, plateGradient);
+
+  context.strokeStyle = "#183126";
+  context.lineWidth = 2.5;
+  context.beginPath();
+  roundedRectPath(context, x, y, width, height, 24);
+  context.stroke();
+
+  context.fillStyle = "#183126";
+  context.font = "700 48px Lora, Georgia, serif";
+  wrapCanvasText(
+    context,
+    recipientName,
+    x + width / 2,
+    y + 60,
+    width - 110,
+    44,
+  );
+
+  context.strokeStyle = "#183126";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(x + 110, y + height - 24);
+  context.lineTo(x + width - 110, y + height - 24);
+  context.stroke();
+
+  context.fillStyle = "#6c7b73";
+  context.font = "600 14px Poppins";
+  context.fillText("Student Name", x + width / 2, y + height - 4);
+  context.restore();
+}
+
+function drawCenterBadge(context, centerX, centerY, gwa, standingLabel) {
+  context.save();
+  context.translate(centerX, centerY);
+
+  context.fillStyle = "#00693e";
+  context.beginPath();
+  context.arc(0, 0, 76, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "#ffd700";
+  context.lineWidth = 8;
+  context.beginPath();
+  context.arc(0, 0, 65, 0, Math.PI * 2);
+  context.stroke();
+
+  context.strokeStyle = "#fff6c7";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(0, 0, 54, 0, Math.PI * 2);
+  context.stroke();
+
+  context.fillStyle = "#ffd700";
+  context.font = "700 15px Poppins";
+  context.textAlign = "center";
+  context.fillText("COMPUTED GWA", 0, -10);
+  context.fillStyle = "#ffffff";
+  context.font = "700 40px Lora, Georgia, serif";
+  context.fillText(gwa.toFixed(2), 0, 26);
+
+  context.restore();
+
+  context.save();
+  drawRibbonTag(context, centerX - 120, centerY + 92, 240, 34, standingLabel);
+  context.restore();
+}
+
+function drawRibbonTag(context, x, y, width, height, label) {
+  context.save();
+  context.fillStyle = "#fff9e2";
+  context.beginPath();
+  context.moveTo(x + 16, y);
+  context.lineTo(x + width - 16, y);
+  context.lineTo(x + width, y + height / 2);
+  context.lineTo(x + width - 16, y + height);
+  context.lineTo(x + 16, y + height);
+  context.lineTo(x, y + height / 2);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = "#183126";
+  context.lineWidth = 2;
+  context.stroke();
+
+  context.fillStyle = "#004225";
+  context.textAlign = "center";
+  context.font = "700 14px Poppins";
+  context.fillText(label.toUpperCase(), x + width / 2, y + 22);
+  context.restore();
+}
+
+function drawRoundedPanel(context, x, y, width, height, radius, fillStyle) {
+  context.save();
+  context.fillStyle = fillStyle;
+  context.beginPath();
+  roundedRectPath(context, x, y, width, height, radius);
+  context.fill();
+  context.restore();
+}
+
+function drawRibbonPanel(context, x, y, width, height) {
+  context.save();
+  context.fillStyle = "#fff8d6";
+  context.beginPath();
+  roundedRectPath(context, x, y, width, height, 20);
+  context.fill();
+  context.strokeStyle = "#183126";
+  context.lineWidth = 2;
+  context.stroke();
+  context.restore();
+}
+
+function drawFooterSignature(context, x, baselineY, generatedDate) {
+  context.save();
+  context.textAlign = "left";
+  context.strokeStyle = "#183126";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(x, baselineY - 22);
+  context.lineTo(x + 250, baselineY - 22);
+  context.stroke();
+
+  context.fillStyle = "#6c7b73";
+  context.font = "600 14px Poppins";
+  context.fillText("Certificate Authority", x, baselineY - 30);
+
+  context.fillStyle = "#183126";
+  context.font = "600 19px Poppins";
+  context.fillText("Verified by GWA Genie", x, baselineY);
+
+  context.fillStyle = "#52655d";
+  context.font = "500 16px Poppins";
+  context.fillText(`Generated on ${generatedDate}`, x, baselineY + 22);
+  context.restore();
+}
+
+function drawVerificationBlock(context, x, baselineY, subjectCount) {
+  context.save();
+  context.textAlign = "right";
+  context.fillStyle = "#00693e";
+  context.font = "700 22px Poppins";
+  context.fillText("Academic Progress Snapshot", x, baselineY);
+
+  context.fillStyle = "#52655d";
+  context.font = "500 16px Poppins";
+  context.fillText(
+    `Prepared from ${subjectCount} recorded subject${subjectCount === 1 ? "" : "s"}`,
+    x,
+    baselineY + 22,
+  );
+  context.restore();
+}
+
+function roundedRectPath(context, x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - safeRadius,
+    y + height,
+  );
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+}
+
+function wrapCanvasText(context, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (context.measureText(testLine).width <= maxWidth || !currentLine) {
+      currentLine = testLine;
+      return;
+    }
+
+    lines.push(currentLine);
+    currentLine = word;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  const startY = y - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, index) => {
+    context.fillText(line, x, startY + index * lineHeight);
+  });
+}
+
+function downloadDataUrl(dataUrl, fileName) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function getCertificateFileName() {
+  const recipientName = normalizeFullName(fullName) || "recorded-student";
+  const safeFileName = recipientName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `gwa-certificate-${safeFileName || "student"}.png`;
 }
 
 function getStandingToneClass(gwa) {
