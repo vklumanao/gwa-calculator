@@ -62,6 +62,19 @@
 
             <div class="calculator-section">
               <form id="subjectForm" class="row g-3">
+                <div class="col-12">
+                  <label class="form-label" for="fullName">
+                    <i class="bi bi-person-vcard"></i>
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fullName"
+                    placeholder="Example: Juan Dela Cruz"
+                    autocomplete="name"
+                  />
+                </div>
                 <div class="col-12 col-md-4">
                   <label class="form-label" for="subject">
                     <i class="bi bi-book"></i>
@@ -180,6 +193,7 @@
                   Clear All
                 </button>
               </div>
+
               <div class="table-responsive">
                 <div class="table-shell">
                   <div class="table-toolbar">
@@ -222,10 +236,19 @@
                   Your GWA appears here once you run the calculation.
                 </p>
               </div>
-              <button class="btn btn-csu btn-calculate" id="calculateBtn">
-                <i class="bi bi-stars"></i>
-                Calculate GWA
-              </button>
+              <div class="result-actions">
+                <button
+                  class="btn btn-outline-csu btn-export"
+                  id="exportPdfBtn"
+                >
+                  <i class="bi bi-file-earmark-pdf"></i>
+                  Export PDF
+                </button>
+                <button class="btn btn-csu btn-calculate" id="calculateBtn">
+                  <i class="bi bi-stars"></i>
+                  Calculate GWA
+                </button>
+              </div>
               <div
                 class="result-card"
                 id="gwaResult"
