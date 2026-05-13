@@ -305,9 +305,8 @@ body {
   box-shadow: 8px 8px 0 #183126;
 }
 
-.table-responsive {
-  overflow-x: visible;
-  -webkit-overflow-scrolling: auto;
+.subjects-table-wrap {
+  width: 100%;
 }
 
 .table-toolbar {
@@ -711,6 +710,28 @@ a:focus {
   text-underline-offset: 0.18em;
 }
 
+.certificate-preview-body {
+  background: linear-gradient(180deg, #fffdf4 0%, #f5f0d5 100%);
+}
+
+.certificate-preview-frame {
+  background:
+    radial-gradient(circle at top, rgba(255, 215, 0, 0.28), transparent 42%),
+    #fff;
+  border: 3px solid var(--neo-border);
+  border-radius: 22px;
+  padding: 1rem;
+  box-shadow: 6px 6px 0 #183126;
+}
+
+.certificate-preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  background: #fff;
+}
+
 @media (max-width: 991px) {
   .calculator-header {
     flex-direction: column;
@@ -777,8 +798,21 @@ a:focus {
     box-shadow: 5px 5px 0 #183126;
   }
 
+  .subjects-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .table-toolbar {
     padding: 0.85rem 0.95rem;
+  }
+
+  .table-shell {
+    min-width: 640px;
+  }
+
+  .csu-table {
+    width: 100%;
   }
 
   .table-caption,
@@ -790,6 +824,12 @@ a:focus {
     border-radius: 18px;
     box-shadow: 5px 5px 0 #183126;
     padding: 1rem;
+  }
+
+  .certificate-preview-frame {
+    padding: 0.65rem;
+    border-radius: 18px;
+    box-shadow: 4px 4px 0 #183126;
   }
 
   .btn-calculate {
