@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Calculate your general weighted average with a clean, privacy-friendly GWA calculator that saves your subject entries in your browser."
+    />
+    <meta name="theme-color" content="#ffd700" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffd700'/%3E%3Cpath d='M14 19h36v26H14z' fill='%23fff8d6' stroke='%23183126' stroke-width='4'/%3E%3Cpath d='M24 19v26' stroke='%23183126' stroke-width='4'/%3E%3Cpath d='M30 30h12' stroke='%2300693e' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -108,6 +117,13 @@
                     id="formFeedback"
                     aria-live="polite"
                   ></p>
+                  <p
+                    class="storage-status mb-0"
+                    id="storageStatus"
+                    aria-live="polite"
+                  >
+                    Entries save only in this browser on this device.
+                  </p>
                 </div>
               </form>
             </div>
@@ -210,7 +226,13 @@
                 <i class="bi bi-stars"></i>
                 Calculate GWA
               </button>
-              <div class="result-card" id="gwaResult">
+              <div
+                class="result-card"
+                id="gwaResult"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <span class="result-kicker">Current status</span>
                 <strong class="result-value">Awaiting entries</strong>
                 <span class="result-message">
@@ -229,24 +251,30 @@
                   <a
                     href="https://www.facebook.com/iamvicrylk"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="social-link"
                     title="Facebook"
+                    aria-label="Visit Vicryl Kez Lumanao on Facebook"
                   >
                     <i class="bi bi-facebook"></i>
                   </a>
                   <a
                     href="https://github.com/vklumanao"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="social-link"
                     title="Github"
+                    aria-label="Visit Vicryl Kez Lumanao on GitHub"
                   >
                     <i class="bi bi-github"></i>
                   </a>
                   <a
                     href="https://www.instagram.com/iamvicrylk/"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="social-link"
                     title="Instagram"
+                    aria-label="Visit Vicryl Kez Lumanao on Instagram"
                   >
                     <i class="bi bi-instagram"></i>
                   </a>
@@ -307,8 +335,23 @@
             <br />
             <small>
               If you have concerns about privacy, you may close this site at any
-              time. For more details, please refer to Vercel's privacy and
-              analytics documentation.
+              time. For more details, please refer to
+              <a
+                href="https://vercel.com/docs/analytics"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Vercel Web Analytics
+              </a>
+              and
+              <a
+                href="https://vercel.com/legal/privacy-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Vercel's Privacy Policy
+              </a>
+              .
             </small>
           </div>
         </div>

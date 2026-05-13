@@ -10,19 +10,41 @@ const clearAllBtn = document.getElementById("clearAllBtn");
 const confirmClearAllBtn = document.getElementById("confirmClearAllBtn");
 const gwaResult = document.getElementById("gwaResult");
 const formFeedback = document.getElementById("formFeedback");
+const storageStatus = document.getElementById("storageStatus");
 const clearAllModalElement = document.getElementById("clearAllModal");
 const clearAllModal = new bootstrap.Modal(clearAllModalElement);
+const subjectInput = document.getElementById("subject");
+const unitsInput = document.getElementById("units");
+const gradeInput = document.getElementById("grade");
 
 renderAll();
+setStorageStatus(
+  subjects.length
+    ? `Restored ${subjects.length} saved subject${
+        subjects.length === 1 ? "" : "s"
+      } from this browser.`
+    : "Entries save only in this browser on this device.",
+);
 
 subjectForm.onsubmit = function (e) {
   e.preventDefault();
 
-  const subject = document.getElementById("subject").value.trim();
-  const units = parseFloat(document.getElementById("units").value);
-  const grade = parseFloat(document.getElementById("grade").value);
+  const subject = subjectInput.value.trim();
+  const units = parseFloat(unitsInput.value);
+  const grade = parseFloat(gradeInput.value);
 
-  const validationError = validateSubjectEntry(subject, units, grade);
+  const validationError = validateSubjectEntry(
+    {
+      subject,
+      units,
+      grade,
+    },
+    {
+      subjectInput,
+      unitsInput,
+      gradeInput,
+    },
+  );
   if (validationError) {
     setFormFeedback(validationError, "error");
     return;
@@ -33,11 +55,34 @@ subjectForm.onsubmit = function (e) {
   persistSubjects();
   renderAll();
   setFormFeedback(`Added ${subject} successfully.`, "success");
+  setStorageStatus(
+    `Saved ${subjects.length} subject${
+      subjects.length === 1 ? "" : "s"
+    } in this browser.`,
+  );
+  trackAnalytics("add_subject", {
+    units,
+    grade,
+  });
   this.reset();
+  resetInputState();
+  subjectInput.focus();
 };
 
 calculateBtn.onclick = function () {
   renderResult();
+  if (subjects.length > 0) {
+    const gwa = calculateGwa();
+    setStorageStatus(
+      `Latest computed GWA: ${gwa.toFixed(2)} across ${subjects.length} subject${
+        subjects.length === 1 ? "" : "s"
+      }.`,
+    );
+    trackAnalytics("calculate_gwa", {
+      subjectCount: subjects.length,
+      gwa: Number(gwa.toFixed(2)),
+    });
+  }
 };
 
 clearAllBtn.onclick = function () {
@@ -50,12 +95,17 @@ clearAllBtn.onclick = function () {
 };
 
 confirmClearAllBtn.onclick = function () {
+  const removedCount = subjects.length;
   subjects = [];
   editingIndex = null;
   persistSubjects();
   renderAll();
   clearAllModal.hide();
   setFormFeedback("All subjects were cleared.", "success");
+  setStorageStatus("Saved entries were removed from this browser.");
+  trackAnalytics("clear_all", {
+    subjectCount: removedCount,
+  });
 };
 
 function renderAll() {
@@ -239,9 +289,7 @@ function renderResult() {
     return;
   }
 
-  const totalUnits = subjects.reduce((sum, s) => sum + s.units, 0);
-  const totalWeighted = subjects.reduce((sum, s) => sum + s.units * s.grade, 0);
-  const gwa = totalWeighted / totalUnits;
+  const gwa = calculateGwa();
   const evaluation = getStanding(gwa);
 
   gwaResult.innerHTML = `
@@ -311,7 +359,18 @@ function saveEdit(index) {
     document.getElementById(`edit-grade-${index}`).value,
   );
 
-  const validationError = validateSubjectEntry(subject, units, grade);
+  const validationError = validateSubjectEntry(
+    {
+      subject,
+      units,
+      grade,
+    },
+    {
+      subjectInput: document.getElementById(`edit-subject-${index}`),
+      unitsInput: document.getElementById(`edit-units-${index}`),
+      gradeInput: document.getElementById(`edit-grade-${index}`),
+    },
+  );
   if (validationError) {
     setFormFeedback(validationError, "error");
     return;
@@ -322,6 +381,11 @@ function saveEdit(index) {
   persistSubjects();
   renderAll();
   setFormFeedback(`Updated ${subject}.`, "success");
+  setStorageStatus(
+    `Changes saved. ${subjects.length} subject${
+      subjects.length === 1 ? "" : "s"
+    } stored in this browser.`,
+  );
 }
 
 function cancelEdit() {
@@ -340,18 +404,33 @@ function removeSubject(index) {
   persistSubjects();
   renderAll();
   setFormFeedback(`Removed ${removedSubject}.`, "success");
+  setStorageStatus(
+    subjects.length
+      ? `Saved list updated. ${subjects.length} subject${
+          subjects.length === 1 ? "" : "s"
+        } remain in this browser.`
+      : "No saved subjects remain in this browser.",
+  );
 }
 
-function validateSubjectEntry(subject, units, grade) {
+function validateSubjectEntry(
+  { subject, units, grade },
+  { subjectInput, unitsInput, gradeInput },
+) {
+  resetInputState(subjectInput, unitsInput, gradeInput);
+
   if (!subject) {
+    setFieldError(subjectInput, "Please enter a subject name.");
     return "Please enter a subject name.";
   }
 
   if (Number.isNaN(units) || units <= 0) {
+    setFieldError(unitsInput, "Units must be greater than 0.");
     return "Units must be greater than 0.";
   }
 
   if (Number.isNaN(grade) || grade < 1 || grade > 5) {
+    setFieldError(gradeInput, "Grade must be between 1.00 and 5.00.");
     return "Grade must be between 1.00 and 5.00.";
   }
 
@@ -393,6 +472,40 @@ function loadSubjects() {
 
 function formatNumber(value) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+}
+
+function calculateGwa() {
+  const totalUnits = subjects.reduce((sum, s) => sum + s.units, 0);
+  const totalWeighted = subjects.reduce((sum, s) => sum + s.units * s.grade, 0);
+  return totalWeighted / totalUnits;
+}
+
+function resetInputState(...inputs) {
+  inputs.forEach((input) => {
+    input.setCustomValidity("");
+    input.removeAttribute("aria-invalid");
+  });
+}
+
+function setFieldError(input, message) {
+  input.setCustomValidity(message);
+  input.setAttribute("aria-invalid", "true");
+  input.reportValidity();
+}
+
+function setStorageStatus(message) {
+  storageStatus.textContent = message;
+}
+
+function trackAnalytics(name, data) {
+  if (typeof window.va !== "function") {
+    return;
+  }
+
+  window.va("event", {
+    name,
+    data,
+  });
 }
 
 function escapeHtml(value) {
