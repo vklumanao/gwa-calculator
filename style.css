@@ -164,7 +164,20 @@ body {
   background: #fff;
 }
 
+.form-select {
+  border-radius: 14px;
+  border: 2px solid var(--neo-border);
+  min-height: 50px;
+  padding: 0.85rem 2.6rem 0.85rem 0.95rem;
+  background-color: #fff;
+}
+
 .form-control:focus {
+  border-color: var(--csu-gold);
+  box-shadow: 4px 4px 0 #ffd700;
+}
+
+.form-select:focus {
   border-color: var(--csu-gold);
   box-shadow: 4px 4px 0 #ffd700;
 }
@@ -172,6 +185,18 @@ body {
 .form-control[aria-invalid="true"] {
   border-color: #b42318;
   box-shadow: 4px 4px 0 #fda29b;
+}
+
+.form-select[aria-invalid="true"] {
+  border-color: #b42318;
+  box-shadow: 4px 4px 0 #fda29b;
+}
+
+.input-note {
+  margin-top: 0.45rem;
+  color: #5c6f65;
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .btn {
@@ -571,6 +596,175 @@ body {
   font-size: 0.95rem;
 }
 
+.motivation-board {
+  flex: 1 1 100%;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 1.15rem;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(255, 215, 0, 0.3),
+      transparent 42%
+    ),
+    #eef7ef;
+  border: 3px solid var(--neo-border);
+  border-radius: 22px;
+  padding: 1.2rem 1.3rem;
+  box-shadow: 8px 8px 0 #183126;
+  overflow: hidden;
+}
+
+.motivation-glow {
+  position: absolute;
+  inset: auto -56px -56px auto;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(255, 215, 0, 0.22);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.motivation-icon-shell {
+  position: relative;
+  z-index: 1;
+  width: 72px;
+  min-width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  border: 3px solid var(--neo-border);
+  background: linear-gradient(180deg, #fffef6 0%, #ffe37a 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 5px 5px 0 #183126;
+}
+
+.motivation-icon {
+  font-size: 1.9rem;
+  color: var(--csu-green-deep);
+}
+
+.motivation-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.motivation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.motivation-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--neo-border);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  background: #fff;
+  color: var(--csu-green-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.motivation-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--neo-border);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  background: rgba(255, 255, 255, 0.82);
+  color: #5d6f66;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.motivation-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.motivation-title {
+  font-family: "Lora", Georgia, serif;
+  color: var(--csu-green-deep);
+  font-size: clamp(1.1rem, 2vw, 1.45rem);
+  line-height: 1.2;
+}
+
+.motivation-message {
+  color: #4d6258;
+  line-height: 1.65;
+  font-size: 0.95rem;
+}
+
+.motivation-tip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  border: 2px dashed rgba(24, 49, 38, 0.35);
+  border-radius: 16px;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.55);
+  color: #42584d;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.motivation-board.is-honors {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(255, 215, 0, 0.38),
+      transparent 42%
+    ),
+    linear-gradient(135deg, #fff6c7, #e7f7dd);
+}
+
+.motivation-board.is-pass {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(255, 215, 0, 0.3),
+      transparent 42%
+    ),
+    #eef7ef;
+}
+
+.motivation-board.is-review {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(255, 215, 0, 0.26),
+      transparent 42%
+    ),
+    #fff5d7;
+}
+
+.motivation-board.is-attention {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(255, 215, 0, 0.18),
+      transparent 42%
+    ),
+    #ffe6d9;
+}
+
 .site-footer {
   background: #f5f0d5;
   border: 3px solid var(--neo-border);
@@ -781,6 +975,10 @@ a:focus {
     width: 100%;
   }
 
+  .input-note {
+    min-height: 0;
+  }
+
   .summary-pill {
     justify-content: space-between;
   }
@@ -826,6 +1024,25 @@ a:focus {
     padding: 1rem;
   }
 
+  .motivation-board {
+    flex-direction: column;
+    padding: 1rem;
+    border-radius: 18px;
+    box-shadow: 5px 5px 0 #183126;
+  }
+
+  .motivation-icon-shell {
+    width: 64px;
+    min-width: 64px;
+    height: 64px;
+    border-radius: 18px;
+    box-shadow: 4px 4px 0 #183126;
+  }
+
+  .motivation-header {
+    align-items: flex-start;
+  }
+
   .certificate-preview-frame {
     padding: 0.65rem;
     border-radius: 18px;
@@ -851,6 +1068,7 @@ a:focus {
 
   .calculator-card,
   .result-card,
+  .motivation-board,
   .stats-section,
   .site-footer,
   .summary-pill,

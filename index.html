@@ -62,7 +62,7 @@
 
             <div class="calculator-section">
               <form id="subjectForm" class="row g-3">
-                <div class="col-12">
+                <div class="col-12 col-lg-6">
                   <label class="form-label" for="fullName">
                     <i class="bi bi-person-vcard"></i>
                     Full Name
@@ -75,54 +75,75 @@
                     autocomplete="name"
                   />
                 </div>
-                <div class="col-12 col-md-4">
-                  <label class="form-label" for="subject">
-                    <i class="bi bi-book"></i>
-                    Subject
+                <div class="col-12 col-lg-6">
+                  <label class="form-label" for="gradingSystem">
+                    <i class="bi bi-sliders"></i>
+                    Grading System
                   </label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="subject"
-                    placeholder="Example: Calculus"
-                    required
-                  />
+                  <select class="form-select" id="gradingSystem">
+                    <option value="standard">
+                      1.00 is highest, 5.00 is lowest
+                    </option>
+                    <option value="reverse">
+                      5.00 is highest, 1.00 is lowest
+                    </option>
+                  </select>
+                  <p class="input-note mb-0">
+                    Choose how your school interprets grades before calculating.
+                  </p>
                 </div>
-                <div class="col-6 col-md-3">
-                  <label class="form-label" for="units">
-                    <i class="bi bi-layers"></i>
-                    Units
-                  </label>
-                  <input
-                    type="number"
-                    class="form-control"
-                    id="units"
-                    placeholder="3"
-                    min="1"
-                    required
-                  />
-                </div>
-                <div class="col-6 col-md-3">
-                  <label class="form-label" for="grade">
-                    <i class="bi bi-award"></i>
-                    Grade
-                  </label>
-                  <input
-                    type="number"
-                    class="form-control"
-                    id="grade"
-                    placeholder="1.75"
-                    min="1"
-                    max="5"
-                    step="0.01"
-                    required
-                  />
-                </div>
-                <div class="col-12 col-md-2 d-grid align-self-end">
-                  <button type="submit" class="btn btn-csu btn-add">
-                    <i class="bi bi-plus-lg"></i>
-                    <span>Add</span>
-                  </button>
+                <div class="col-12">
+                  <div class="row g-3 align-items-end">
+                    <div class="col-12 col-md-6 col-lg-5">
+                      <label class="form-label" for="subject">
+                        <i class="bi bi-book"></i>
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="subject"
+                        placeholder="Example: Calculus"
+                        required
+                      />
+                    </div>
+                    <div class="col-6 col-md-2 col-lg-2">
+                      <label class="form-label" for="units">
+                        <i class="bi bi-layers"></i>
+                        Units
+                      </label>
+                      <input
+                        type="number"
+                        class="form-control"
+                        id="units"
+                        placeholder="3"
+                        min="1"
+                        required
+                      />
+                    </div>
+                    <div class="col-6 col-md-2 col-lg-2">
+                      <label class="form-label" for="grade">
+                        <i class="bi bi-award"></i>
+                        Grade
+                      </label>
+                      <input
+                        type="number"
+                        class="form-control"
+                        id="grade"
+                        placeholder="1.75"
+                        min="1"
+                        max="5"
+                        step="0.01"
+                        required
+                      />
+                    </div>
+                    <div class="col-12 col-md-2 col-lg-3 d-grid">
+                      <button type="submit" class="btn btn-csu btn-add">
+                        <i class="bi bi-plus-lg"></i>
+                        <span>Add</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div class="col-12">
                   <p
@@ -269,6 +290,33 @@
                   Add at least one subject to generate your weighted average.
                 </span>
               </div>
+              <aside
+                class="motivation-board"
+                id="motivationBoard"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <div class="motivation-glow" aria-hidden="true"></div>
+                <div class="motivation-icon-shell" aria-hidden="true">
+                  <i class="bi bi-lightbulb-fill motivation-icon"></i>
+                </div>
+                <div class="motivation-content">
+                  <div class="motivation-header">
+                    <span class="motivation-kicker">Motivation Board</span>
+                    <span class="motivation-chip">Waiting for result</span>
+                  </div>
+                  <div class="motivation-body">
+                    <strong class="motivation-title">Ready when you are</strong>
+                    <p class="motivation-message mb-0">
+                      Calculate your GWA to unlock a quick boost, reminder, or
+                      congratulations based on your result.
+                    </p>
+                    <p class="motivation-tip mb-0">
+                      Your next message will adjust based on your standing.
+                    </p>
+                  </div>
+                </div>
+              </aside>
             </div>
 
             <footer class="site-footer" aria-label="Site footer">
