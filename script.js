@@ -1,39 +1,76 @@
 const STORAGE_KEY = "gwa-calculator-subjects";
 const NAME_STORAGE_KEY = "gwa-calculator-full-name";
+const GRADING_SYSTEM_STORAGE_KEY = "gwa-calculator-grading-system";
 
 // Store subjects and track which row is being edited.
 let subjects = loadSubjects();
 let editingIndex = null;
 let fullName = loadFullName();
+let gradingSystem = loadGradingSystem();
 
 const subjectForm = document.getElementById("subjectForm");
 const calculateBtn = document.getElementById("calculateBtn");
 const exportPdfBtn = document.getElementById("exportPdfBtn");
+const exportCertificateBtn = document.getElementById("exportCertificateBtn");
 const clearAllBtn = document.getElementById("clearAllBtn");
 const confirmClearAllBtn = document.getElementById("confirmClearAllBtn");
 const gwaResult = document.getElementById("gwaResult");
+const motivationBoard = document.getElementById("motivationBoard");
 const formFeedback = document.getElementById("formFeedback");
 const storageStatus = document.getElementById("storageStatus");
 const clearAllModalElement = document.getElementById("clearAllModal");
 const clearAllModal = new bootstrap.Modal(clearAllModalElement);
+const certificatePreviewModalElement = document.getElementById(
+  "certificatePreviewModal",
+);
+const certificatePreviewModal = new bootstrap.Modal(
+  certificatePreviewModalElement,
+);
+const certificatePreviewImage = document.getElementById(
+  "certificatePreviewImage",
+);
+const downloadCertificateBtn = document.getElementById(
+  "downloadCertificateBtn",
+);
+const gradingSystemSelect = document.getElementById("gradingSystem");
 const fullNameInput = document.getElementById("fullName");
 const subjectInput = document.getElementById("subject");
 const unitsInput = document.getElementById("units");
 const gradeInput = document.getElementById("grade");
+let certificateImageDataUrl = "";
+let hasCalculated = false;
+let resultNeedsRefresh = false;
 
 fullNameInput.value = fullName;
+gradingSystemSelect.value = gradingSystem;
+syncGradeInputPresentation();
 renderAll();
 setStorageStatus(
   subjects.length
     ? `Restored ${subjects.length} saved subject${
         subjects.length === 1 ? "" : "s"
-      } from this browser.`
-    : "Entries save only in this browser on this device.",
+      } from this browser. Current scale: ${getGradingSystemLabel()}.`
+    : `Entries save only in this browser on this device. Current scale: ${getGradingSystemLabel()}.`,
 );
 
 fullNameInput.addEventListener("input", function () {
   fullName = normalizeFullName(this.value);
   persistFullName();
+});
+
+gradingSystemSelect.addEventListener("change", function () {
+  gradingSystem = this.value === "reverse" ? "reverse" : "standard";
+  persistGradingSystem();
+  syncGradeInputPresentation();
+  syncCalculationStateAfterDataChange();
+  renderAll();
+  setFormFeedback(
+    `Grading system updated to ${getGradingSystemLabel().toLowerCase()}.`,
+    "success",
+  );
+  setStorageStatus(
+    `Current grading system: ${getGradingSystemLabel()}. Recalculate to refresh the interpretation of your result.`,
+  );
 });
 
 subjectForm.onsubmit = function (e) {
@@ -63,6 +100,7 @@ subjectForm.onsubmit = function (e) {
   subjects.push({ subject, units, grade });
   editingIndex = null;
   persistSubjects();
+  syncCalculationStateAfterDataChange();
   renderAll();
   setFormFeedback(`Added ${subject} successfully.`, "success");
   setStorageStatus(
@@ -80,7 +118,10 @@ subjectForm.onsubmit = function (e) {
 };
 
 calculateBtn.onclick = function () {
+  hasCalculated = true;
+  resultNeedsRefresh = false;
   renderResult();
+  renderMotivationBoard();
   if (subjects.length > 0) {
     const gwa = calculateGwa();
     setStorageStatus(
@@ -95,12 +136,28 @@ calculateBtn.onclick = function () {
   }
 };
 
-exportPdfBtn.onclick = function () {
+function ensureFreshCalculatedResult(actionLabel) {
   if (subjects.length === 0) {
+    setFormFeedback(`Add at least one subject before ${actionLabel}.`, "error");
+    return false;
+  }
+
+  if (resultNeedsRefresh || !hasCalculated) {
     setFormFeedback(
-      "Add at least one subject before exporting a PDF.",
+      `Press Calculate GWA first before ${actionLabel}.`,
       "error",
     );
+    setStorageStatus(
+      "Your latest entries need a fresh calculation before export actions are available.",
+    );
+    return false;
+  }
+
+  return true;
+}
+
+exportPdfBtn.onclick = function () {
+  if (!ensureFreshCalculatedResult("exporting a PDF")) {
     return;
   }
 
@@ -129,6 +186,36 @@ exportPdfBtn.onclick = function () {
   });
 };
 
+exportCertificateBtn.onclick = function () {
+  if (!ensureFreshCalculatedResult("generating a certificate image")) {
+    return;
+  }
+
+  certificateImageDataUrl = buildCertificateImageDataUrl();
+  certificatePreviewImage.src = certificateImageDataUrl;
+  certificatePreviewModal.show();
+  setFormFeedback("Certificate preview is ready.", "success");
+  setStorageStatus(
+    `Prepared a certificate image for ${subjects.length} subject${
+      subjects.length === 1 ? "" : "s"
+    }.`,
+  );
+  trackAnalytics("export_certificate", {
+    subjectCount: subjects.length,
+    gwa: Number(calculateGwa().toFixed(2)),
+  });
+};
+
+downloadCertificateBtn.onclick = function () {
+  if (!certificateImageDataUrl) {
+    setFormFeedback("Generate the certificate preview first.", "error");
+    return;
+  }
+
+  downloadDataUrl(certificateImageDataUrl, getCertificateFileName());
+  setFormFeedback("Certificate image downloaded successfully.", "success");
+};
+
 clearAllBtn.onclick = function () {
   if (subjects.length === 0) {
     setFormFeedback("There are no saved subjects to clear.", "error");
@@ -142,6 +229,8 @@ confirmClearAllBtn.onclick = function () {
   const removedCount = subjects.length;
   subjects = [];
   editingIndex = null;
+  hasCalculated = false;
+  resultNeedsRefresh = false;
   persistSubjects();
   renderAll();
   clearAllModal.hide();
@@ -157,6 +246,31 @@ function renderAll() {
   updateSummary();
   updateStats();
   renderResult();
+  renderMotivationBoard();
+}
+
+function syncCalculationStateAfterDataChange() {
+  const hadComputedResult = hasCalculated || resultNeedsRefresh;
+  hasCalculated = false;
+  resultNeedsRefresh = hadComputedResult && subjects.length > 0;
+}
+
+function isReverseGradingSystem() {
+  return gradingSystem === "reverse";
+}
+
+function normalizeGradeForStanding(value) {
+  return isReverseGradingSystem() ? 6 - value : value;
+}
+
+function getGradingSystemLabel() {
+  return isReverseGradingSystem()
+    ? "5.00 is highest, 1.00 is lowest"
+    : "1.00 is highest, 5.00 is lowest";
+}
+
+function syncGradeInputPresentation() {
+  gradeInput.placeholder = isReverseGradingSystem() ? "4.50" : "1.75";
 }
 
 function renderTable() {
@@ -319,16 +433,42 @@ function updateStats() {
   }
 
   const grades = subjects.map((subjectItem) => subjectItem.grade);
-  statBest.textContent = formatNumber(Math.min(...grades));
-  statWorst.textContent = formatNumber(Math.max(...grades));
+  const bestGrade = isReverseGradingSystem()
+    ? Math.max(...grades)
+    : Math.min(...grades);
+  const worstGrade = isReverseGradingSystem()
+    ? Math.min(...grades)
+    : Math.max(...grades);
+  statBest.textContent = formatNumber(bestGrade);
+  statWorst.textContent = formatNumber(worstGrade);
 }
 
 function renderResult() {
   if (subjects.length === 0) {
+    hasCalculated = false;
+    resultNeedsRefresh = false;
     gwaResult.innerHTML = `
       <span class="result-kicker">Current status</span>
       <strong class="result-value">Awaiting entries</strong>
       <span class="result-message">Add at least one subject to generate your weighted average.</span>
+    `;
+    return;
+  }
+
+  if (resultNeedsRefresh) {
+    gwaResult.innerHTML = `
+      <span class="result-kicker">Current status</span>
+      <strong class="result-value">Result outdated</strong>
+      <span class="result-message">Your entries changed after the last calculation. Press <strong>Calculate GWA</strong> to refresh your latest result.</span>
+    `;
+    return;
+  }
+
+  if (!hasCalculated) {
+    gwaResult.innerHTML = `
+      <span class="result-kicker">Current status</span>
+      <strong class="result-value">Ready to calculate</strong>
+      <span class="result-message">Your subjects are in place. Press <strong>Calculate GWA</strong> to generate your weighted average.</span>
     `;
     return;
   }
@@ -339,19 +479,126 @@ function renderResult() {
   gwaResult.innerHTML = `
     <span class="result-kicker">Computed GWA</span>
     <strong class="result-value">${gwa.toFixed(2)}</strong>
-    <span class="result-message"><strong>${evaluation.label}.</strong> ${evaluation.detail}</span>
+    <span class="result-message"><strong>${evaluation.label}.</strong> ${evaluation.detail} <em>Scale: ${getGradingSystemLabel()}.</em></span>
+  `;
+}
+
+function renderMotivationBoard() {
+  if (subjects.length === 0) {
+    hasCalculated = false;
+    resultNeedsRefresh = false;
+    motivationBoard.className = "motivation-board";
+    motivationBoard.innerHTML = `
+      <div class="motivation-glow" aria-hidden="true"></div>
+      <div class="motivation-icon-shell" aria-hidden="true">
+        <i class="bi bi-lightbulb-fill motivation-icon"></i>
+      </div>
+      <div class="motivation-content">
+        <div class="motivation-header">
+          <span class="motivation-kicker">Motivation Board</span>
+          <span class="motivation-chip">Waiting for result</span>
+        </div>
+        <div class="motivation-body">
+          <strong class="motivation-title">Ready when you are</strong>
+          <p class="motivation-message mb-0">
+            Calculate your GWA to unlock a quick boost, reminder, or congratulations based on your result.
+          </p>
+          <p class="motivation-tip mb-0">
+            Your next message will adjust based on your standing.
+          </p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (resultNeedsRefresh) {
+    motivationBoard.className = "motivation-board is-review";
+    motivationBoard.innerHTML = `
+      <div class="motivation-glow" aria-hidden="true"></div>
+      <div class="motivation-icon-shell" aria-hidden="true">
+        <i class="bi bi-arrow-clockwise motivation-icon"></i>
+      </div>
+      <div class="motivation-content">
+        <div class="motivation-header">
+          <span class="motivation-kicker">Motivation Board</span>
+          <span class="motivation-chip">Recalculate needed</span>
+        </div>
+        <div class="motivation-body">
+          <strong class="motivation-title">Your latest edits are waiting.</strong>
+          <p class="motivation-message mb-0">
+            You updated the subject list, so the old motivation no longer matches the current entries.
+          </p>
+          <p class="motivation-tip mb-0">
+            Press Calculate GWA again to get a fresh result and updated message.
+          </p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (!hasCalculated) {
+    motivationBoard.className = "motivation-board";
+    motivationBoard.innerHTML = `
+      <div class="motivation-glow" aria-hidden="true"></div>
+      <div class="motivation-icon-shell" aria-hidden="true">
+        <i class="bi bi-stars motivation-icon"></i>
+      </div>
+      <div class="motivation-content">
+        <div class="motivation-header">
+          <span class="motivation-kicker">Motivation Board</span>
+          <span class="motivation-chip">Ready to analyze</span>
+        </div>
+        <div class="motivation-body">
+          <strong class="motivation-title">One tap away</strong>
+          <p class="motivation-message mb-0">
+            Your entries are ready. Press Calculate GWA to see a personalized message for your current standing.
+          </p>
+          <p class="motivation-tip mb-0">
+            Tip: update your rows first if you want the message to match your latest grades.
+          </p>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  const gwa = calculateGwa();
+  const evaluation = getStanding(gwa);
+  const motivation = getMotivationContent(evaluation.label, gwa);
+
+  motivationBoard.className = `motivation-board ${motivation.variant}`;
+  motivationBoard.innerHTML = `
+    <div class="motivation-glow" aria-hidden="true"></div>
+    <div class="motivation-icon-shell" aria-hidden="true">
+      <i class="bi ${motivation.icon} motivation-icon"></i>
+    </div>
+    <div class="motivation-content">
+      <div class="motivation-header">
+        <span class="motivation-kicker">${motivation.kicker}</span>
+        <span class="motivation-chip">${motivation.chip}</span>
+      </div>
+      <div class="motivation-body">
+        <strong class="motivation-title">${motivation.title}</strong>
+        <p class="motivation-message mb-0">${motivation.message}</p>
+        <p class="motivation-tip mb-0">${motivation.tip}</p>
+      </div>
+    </div>
   `;
 }
 
 function getStanding(gwa) {
-  if (gwa >= 1 && gwa <= 1.25) {
+  const interpretedGwa = normalizeGradeForStanding(gwa);
+
+  if (interpretedGwa >= 1 && interpretedGwa <= 1.25) {
     return {
       label: "President's Lister",
       detail: "Excellent work. You qualify for President's Lister recognition.",
     };
   }
 
-  if (gwa > 1.25 && gwa <= 1.5) {
+  if (interpretedGwa > 1.25 && interpretedGwa <= 1.5) {
     return {
       label: "Vice President's Lister",
       detail:
@@ -359,14 +606,14 @@ function getStanding(gwa) {
     };
   }
 
-  if (gwa > 1.5 && gwa <= 1.75) {
+  if (interpretedGwa > 1.5 && interpretedGwa <= 1.75) {
     return {
       label: "Dean's Lister",
       detail: "Great job. You qualify for Dean's Lister recognition.",
     };
   }
 
-  if (gwa > 1.75 && gwa <= 3) {
+  if (interpretedGwa > 1.75 && interpretedGwa <= 3) {
     return {
       label: "Passed",
       detail:
@@ -374,7 +621,7 @@ function getStanding(gwa) {
     };
   }
 
-  if (gwa > 3 && gwa < 4) {
+  if (interpretedGwa > 3 && interpretedGwa < 4) {
     return {
       label: "For review",
       detail:
@@ -386,6 +633,65 @@ function getStanding(gwa) {
     label: "Needs attention",
     detail:
       "This result needs improvement. Review the entered grades and plan your next move.",
+  };
+}
+
+function getMotivationContent(label, gwa) {
+  const effortSummary = isReverseGradingSystem()
+    ? `${gwa.toFixed(2)} on a ${getGradingSystemLabel()} scale`
+    : `${gwa.toFixed(2)} GWA`;
+
+  if (
+    label === "President's Lister" ||
+    label === "Vice President's Lister" ||
+    label === "Dean's Lister"
+  ) {
+    return {
+      variant: "is-honors",
+      icon: "bi-trophy-fill",
+      kicker: "Honor Roll Energy",
+      chip: "Elite performance",
+      title: "Congratulations, you earned this moment.",
+      message: `A result of ${effortSummary} reflects consistent effort and discipline. Celebrate the win, then keep that momentum going for the next term.`,
+      tip: "Keep your study habits steady and protect the routines that helped you reach this level.",
+    };
+  }
+
+  if (label === "Passed") {
+    return {
+      variant: "is-pass",
+      icon: "bi-emoji-smile-fill",
+      kicker: "Keep Climbing",
+      chip: "Passed",
+      title: "Nice work, you made it through.",
+      message:
+        "Passing is progress. Be proud of this step, keep learning from each subject, and aim a little higher on your next calculation.",
+      tip: "Look at the subjects with the highest grades first. Those are the best places to improve next term.",
+    };
+  }
+
+  if (label === "For review") {
+    return {
+      variant: "is-review",
+      icon: "bi-arrow-repeat",
+      kicker: "Bounce Back",
+      chip: "Needs review",
+      title: "You still have room to recover.",
+      message:
+        "This result is a reminder, not the end of the story. Review the subjects that pulled your average up and build a smarter comeback plan from here.",
+      tip: "Start with one subject you can realistically improve. Small gains across multiple classes can shift your average a lot.",
+    };
+  }
+
+  return {
+    variant: "is-attention",
+    icon: "bi-heart-pulse-fill",
+    kicker: "Keep Going",
+    chip: "Reset and rebuild",
+    title: "This result does not define you.",
+    message:
+      "Every strong comeback starts with one honest check-in. Take this as motivation to reset, ask for help when needed, and give your next semester a better shot.",
+    tip: "Talk to a classmate, mentor, or instructor early. Support plus a clear plan can change the next outcome.",
   };
 }
 
@@ -423,6 +729,7 @@ function saveEdit(index) {
   subjects[index] = { subject, units, grade };
   editingIndex = null;
   persistSubjects();
+  syncCalculationStateAfterDataChange();
   renderAll();
   setFormFeedback(`Updated ${subject}.`, "success");
   setStorageStatus(
@@ -446,6 +753,7 @@ function removeSubject(index) {
     editingIndex -= 1;
   }
   persistSubjects();
+  syncCalculationStateAfterDataChange();
   renderAll();
   setFormFeedback(`Removed ${removedSubject}.`, "success");
   setStorageStatus(
@@ -528,6 +836,15 @@ function loadFullName() {
   return normalizeFullName(savedName || "");
 }
 
+function persistGradingSystem() {
+  window.localStorage.setItem(GRADING_SYSTEM_STORAGE_KEY, gradingSystem);
+}
+
+function loadGradingSystem() {
+  const saved = window.localStorage.getItem(GRADING_SYSTEM_STORAGE_KEY);
+  return saved === "reverse" ? "reverse" : "standard";
+}
+
 function formatNumber(value) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(2);
 }
@@ -586,6 +903,7 @@ function escapeAttribute(value) {
 function buildPdfReportMarkup() {
   const gwa = calculateGwa();
   const evaluation = getStanding(gwa);
+  const gradingSystemLabel = getGradingSystemLabel();
   const totalUnits = subjects.reduce((sum, subject) => sum + subject.units, 0);
   const totalWeighted = subjects.reduce(
     (sum, subject) => sum + subject.units * subject.grade,
@@ -626,7 +944,7 @@ function buildPdfReportMarkup() {
           : `Attached Subject Breakdown (Page ${pageIndex + 1})`;
       const pageLead =
         pageIndex === 0
-          ? "A detailed record of the subjects, grades, units, and weighted values used to compute the certified GWA."
+          ? `A detailed record of the subjects, grades, units, and weighted values used to compute the certified GWA using the ${gradingSystemLabel} scale.`
           : "Continuation of the subject-by-subject breakdown used in the certificate summary.";
       const summaryBlock =
         pageIndex === 0
@@ -647,6 +965,10 @@ function buildPdfReportMarkup() {
               <div class="summary-card">
                 <span class="summary-label">Standing</span>
                 <span class="summary-value">${escapeHtml(evaluation.label)}</span>
+              </div>
+              <div class="summary-card">
+                <span class="summary-label">Grade Scale</span>
+                <span class="summary-value">${escapeHtml(gradingSystemLabel)}</span>
               </div>
             </section>
           `
@@ -1345,12 +1667,424 @@ function buildPdfReportMarkup() {
   `;
 }
 
+function buildCertificateImageDataUrl() {
+  const canvas = document.createElement("canvas");
+  const width = 1600;
+  const height = 1120;
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  const gwa = calculateGwa();
+  const evaluation = getStanding(gwa);
+  const gradingSystemLabel = getGradingSystemLabel();
+  const totalUnits = subjects.reduce((sum, subject) => sum + subject.units, 0);
+  const generatedDate = new Date().toLocaleDateString("en-PH", {
+    dateStyle: "long",
+  });
+  const recipientName = fullName || "The Recorded Student";
+  const subjectCount = subjects.length;
+
+  context.fillStyle = "#f1ead2";
+  context.fillRect(0, 0, width, height);
+
+  const paperGradient = context.createLinearGradient(0, 0, width, height);
+  paperGradient.addColorStop(0, "#fff6cf");
+  paperGradient.addColorStop(0.45, "#fffdf5");
+  paperGradient.addColorStop(1, "#f0ecd8");
+  context.fillStyle = paperGradient;
+  context.fillRect(40, 40, width - 80, height - 80);
+
+  drawCertificateGlow(context, width, height);
+
+  context.strokeStyle = "#183126";
+  context.lineWidth = 8;
+  context.strokeRect(40, 40, width - 80, height - 80);
+  context.lineWidth = 2;
+  context.strokeRect(72, 72, width - 144, height - 144);
+
+  drawCertificateSeal(context, width / 2, 138, 32);
+  drawTopDivider(context, width);
+
+  context.textAlign = "center";
+  context.fillStyle = "#00693e";
+  context.font = "700 17px Poppins";
+  context.fillText("GWA GENIE ACADEMIC ARCHIVE", width / 2, 195);
+  context.fillStyle = "#7a6a2b";
+  context.font = "600 15px Poppins";
+  context.fillText("Personal Academic Summary Certificate", width / 2, 223);
+  context.fillStyle = "#004225";
+  context.font = "700 62px Lora, Georgia, serif";
+  context.fillText("Certificate of Academic Standing", width / 2, 300);
+
+  context.fillStyle = "#52655d";
+  context.font = "500 22px Poppins";
+  wrapCanvasText(
+    context,
+    `This certifies that the student named below has a computed general weighted average based on the recorded subjects in this session using the ${gradingSystemLabel} scale.`,
+    width / 2,
+    358,
+    920,
+    30,
+  );
+
+  drawNamePlate(context, width / 2 - 430, 408, 860, 118, recipientName);
+  drawCenterBadge(context, width / 2, 614, gwa, evaluation.label);
+
+  const cards = [
+    { label: "Computed GWA", value: gwa.toFixed(2) },
+    { label: "Academic Standing", value: evaluation.label },
+    { label: "Grade Scale", value: gradingSystemLabel },
+    { label: "Subjects Counted", value: `${subjectCount}` },
+    { label: "Total Units", value: formatNumber(totalUnits) },
+  ];
+
+  const cardWidth = 208;
+  const cardHeight = 150;
+  const cardGap = 18;
+  const cardsTotalWidth =
+    cardWidth * cards.length + cardGap * (cards.length - 1);
+  let cardX = (width - cardsTotalWidth) / 2;
+
+  cards.forEach((card, index) => {
+    const y = 736;
+    const accentColor = index % 2 === 0 ? "#fff6cb" : "#e8f4ea";
+    drawRoundedPanel(context, cardX, y, cardWidth, cardHeight, 22, "#ffffff");
+    context.save();
+    context.fillStyle = accentColor;
+    context.beginPath();
+    roundedRectPath(context, cardX + 12, y + 12, cardWidth - 24, 42, 14);
+    context.fill();
+    context.restore();
+
+    context.strokeStyle = "#183126";
+    context.lineWidth = 3;
+    context.beginPath();
+    roundedRectPath(context, cardX, y, cardWidth, cardHeight, 22);
+    context.stroke();
+
+    context.fillStyle = "#004225";
+    context.font = "700 17px Poppins";
+    context.fillText(card.label, cardX + cardWidth / 2, y + 39);
+
+    context.fillStyle = "#004225";
+    context.font =
+      card.label === "Academic Standing"
+        ? "700 24px Lora, Georgia, serif"
+        : "700 32px Lora, Georgia, serif";
+    wrapCanvasText(
+      context,
+      card.value,
+      cardX + cardWidth / 2,
+      y + 84,
+      cardWidth - 38,
+      30,
+    );
+
+    context.fillStyle = "#7b857f";
+    context.font = "600 15px Poppins";
+    context.fillText(
+      "Based on current entries",
+      cardX + cardWidth / 2,
+      y + 126,
+    );
+
+    cardX += cardWidth + cardGap;
+  });
+
+  drawRibbonPanel(context, 200, 918, width - 400, 94);
+  return canvas.toDataURL("image/png");
+}
+
+function drawCertificateGlow(context, width, height) {
+  context.save();
+  const glow = context.createRadialGradient(
+    width / 2,
+    320,
+    140,
+    width / 2,
+    320,
+    620,
+  );
+  glow.addColorStop(0, "rgba(255, 255, 255, 0.92)");
+  glow.addColorStop(0.5, "rgba(255, 249, 214, 0.24)");
+  glow.addColorStop(1, "rgba(255, 255, 255, 0)");
+  context.fillStyle = glow;
+  context.fillRect(100, 100, width - 200, height - 200);
+  context.restore();
+}
+
+function drawTopDivider(context, width) {
+  context.save();
+  context.strokeStyle = "#b39a38";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(width / 2 - 150, 176);
+  context.lineTo(width / 2 + 150, 176);
+  context.stroke();
+
+  context.fillStyle = "#b39a38";
+  for (let x = width / 2 - 138; x <= width / 2 + 138; x += 69) {
+    context.beginPath();
+    context.moveTo(x, 176);
+    context.lineTo(x + 7, 169);
+    context.lineTo(x + 14, 176);
+    context.lineTo(x + 7, 183);
+    context.closePath();
+    context.fill();
+  }
+  context.restore();
+}
+
+function drawCertificateSeal(context, x, y, radius = 48) {
+  context.save();
+  context.fillStyle = "#00693e";
+  context.beginPath();
+  context.arc(x, y, radius, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "#ffd700";
+  context.lineWidth = Math.max(5, radius * 0.16);
+  context.beginPath();
+  context.arc(x, y, radius - 9, 0, Math.PI * 2);
+  context.stroke();
+
+  context.fillStyle = "#ffd700";
+  context.font = `700 ${Math.round(radius * 0.9)}px Poppins`;
+  context.textAlign = "center";
+  context.fillText("G", x, y + radius * 0.28);
+  context.restore();
+}
+
+function drawNamePlate(context, x, y, width, height, recipientName) {
+  context.save();
+  const plateGradient = context.createLinearGradient(x, y, x, y + height);
+  plateGradient.addColorStop(0, "#fffdfa");
+  plateGradient.addColorStop(1, "#f8f0c7");
+  drawRoundedPanel(context, x, y, width, height, 24, plateGradient);
+
+  context.strokeStyle = "#183126";
+  context.lineWidth = 2.5;
+  context.beginPath();
+  roundedRectPath(context, x, y, width, height, 24);
+  context.stroke();
+
+  context.fillStyle = "#183126";
+  context.font = "700 48px Lora, Georgia, serif";
+  wrapCanvasText(
+    context,
+    recipientName,
+    x + width / 2,
+    y + 60,
+    width - 110,
+    44,
+  );
+
+  context.strokeStyle = "#183126";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(x + 110, y + height - 24);
+  context.lineTo(x + width - 110, y + height - 24);
+  context.stroke();
+
+  context.fillStyle = "#6c7b73";
+  context.font = "600 14px Poppins";
+  context.fillText("Student Name", x + width / 2, y + height - 4);
+  context.restore();
+}
+
+function drawCenterBadge(context, centerX, centerY, gwa, standingLabel) {
+  context.save();
+  context.translate(centerX, centerY);
+
+  context.fillStyle = "#00693e";
+  context.beginPath();
+  context.arc(0, 0, 76, 0, Math.PI * 2);
+  context.fill();
+
+  context.strokeStyle = "#ffd700";
+  context.lineWidth = 8;
+  context.beginPath();
+  context.arc(0, 0, 65, 0, Math.PI * 2);
+  context.stroke();
+
+  context.strokeStyle = "#fff6c7";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(0, 0, 54, 0, Math.PI * 2);
+  context.stroke();
+
+  context.fillStyle = "#ffd700";
+  context.font = "700 15px Poppins";
+  context.textAlign = "center";
+  context.fillText("COMPUTED GWA", 0, -10);
+  context.fillStyle = "#ffffff";
+  context.font = "700 40px Lora, Georgia, serif";
+  context.fillText(gwa.toFixed(2), 0, 26);
+
+  context.restore();
+
+  context.save();
+  drawRibbonTag(context, centerX - 120, centerY + 92, 240, 34, standingLabel);
+  context.restore();
+}
+
+function drawRibbonTag(context, x, y, width, height, label) {
+  context.save();
+  context.fillStyle = "#fff9e2";
+  context.beginPath();
+  context.moveTo(x + 16, y);
+  context.lineTo(x + width - 16, y);
+  context.lineTo(x + width, y + height / 2);
+  context.lineTo(x + width - 16, y + height);
+  context.lineTo(x + 16, y + height);
+  context.lineTo(x, y + height / 2);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = "#183126";
+  context.lineWidth = 2;
+  context.stroke();
+
+  context.fillStyle = "#004225";
+  context.textAlign = "center";
+  context.font = "700 14px Poppins";
+  context.fillText(label.toUpperCase(), x + width / 2, y + 22);
+  context.restore();
+}
+
+function drawRoundedPanel(context, x, y, width, height, radius, fillStyle) {
+  context.save();
+  context.fillStyle = fillStyle;
+  context.beginPath();
+  roundedRectPath(context, x, y, width, height, radius);
+  context.fill();
+  context.restore();
+}
+
+function drawRibbonPanel(context, x, y, width, height) {
+  context.save();
+  context.fillStyle = "#fff8d6";
+  context.beginPath();
+  roundedRectPath(context, x, y, width, height, 20);
+  context.fill();
+  context.strokeStyle = "#183126";
+  context.lineWidth = 2;
+  context.stroke();
+  context.restore();
+}
+
+function drawFooterSignature(context, x, baselineY, generatedDate) {
+  context.save();
+  context.textAlign = "left";
+  context.strokeStyle = "#183126";
+  context.lineWidth = 1.5;
+  context.beginPath();
+  context.moveTo(x, baselineY - 22);
+  context.lineTo(x + 250, baselineY - 22);
+  context.stroke();
+
+  context.fillStyle = "#6c7b73";
+  context.font = "600 14px Poppins";
+  context.fillText("Certificate Authority", x, baselineY - 30);
+
+  context.fillStyle = "#183126";
+  context.font = "600 19px Poppins";
+  context.fillText("Verified by GWA Genie", x, baselineY);
+
+  context.fillStyle = "#52655d";
+  context.font = "500 16px Poppins";
+  context.fillText(`Generated on ${generatedDate}`, x, baselineY + 22);
+  context.restore();
+}
+
+function drawVerificationBlock(context, x, baselineY, subjectCount) {
+  context.save();
+  context.textAlign = "right";
+  context.fillStyle = "#00693e";
+  context.font = "700 22px Poppins";
+  context.fillText("Academic Progress Snapshot", x, baselineY);
+
+  context.fillStyle = "#52655d";
+  context.font = "500 16px Poppins";
+  context.fillText(
+    `Prepared from ${subjectCount} recorded subject${subjectCount === 1 ? "" : "s"}`,
+    x,
+    baselineY + 22,
+  );
+  context.restore();
+}
+
+function roundedRectPath(context, x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - safeRadius,
+    y + height,
+  );
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+}
+
+function wrapCanvasText(context, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (context.measureText(testLine).width <= maxWidth || !currentLine) {
+      currentLine = testLine;
+      return;
+    }
+
+    lines.push(currentLine);
+    currentLine = word;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  const startY = y - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, index) => {
+    context.fillText(line, x, startY + index * lineHeight);
+  });
+}
+
+function downloadDataUrl(dataUrl, fileName) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function getCertificateFileName() {
+  const recipientName = normalizeFullName(fullName) || "recorded-student";
+  const safeFileName = recipientName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `gwa-certificate-${safeFileName || "student"}.png`;
+}
+
 function getStandingToneClass(gwa) {
-  if (gwa <= 1.75) {
+  const interpretedGwa = normalizeGradeForStanding(gwa);
+
+  if (interpretedGwa <= 1.75) {
     return "standing-good";
   }
 
-  if (gwa <= 3) {
+  if (interpretedGwa <= 3) {
     return "standing-caution";
   }
 
